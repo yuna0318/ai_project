@@ -1,3 +1,7 @@
 streamlit
 folium
 streamlit-folium
+requirements.txt
+pandas
+matplotlib
+numpy
