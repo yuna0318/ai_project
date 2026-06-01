@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
 # --------------------------
 # 페이지 설정
@@ -10,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🌡️ 서울 연도별 기온 분석")
+st.title("🌡️ 서울 기온 분석 및 미래 기온 예측")
 
 # --------------------------
 # 데이터 불러오기
@@ -22,19 +24,15 @@ def load_data():
     except:
         df = pd.read_csv("seoul.csv", encoding="utf-8")
 
-    # 컬럼명 공백 제거
     df.columns = df.columns.str.strip()
 
-    # 날짜 변환
     df["날짜"] = pd.to_datetime(
         df["날짜"],
         errors="coerce"
     )
 
-    # 날짜 오류 제거
     df = df.dropna(subset=["날짜"])
 
-    # 연도, 월, 일 생성
     df["연도"] = df["날짜"].dt.year
     df["월"] = df["날짜"].dt.month
     df["일"] = df["날짜"].dt.day
@@ -69,7 +67,41 @@ day = st.selectbox(
 filtered = df[
     (df["월"] == month)
     & (df["일"] == day)
-].sort_values("연도")
+].copy()
+
+filtered = filtered.sort_values("연도")
+
+# --------------------------
+# 미래 연도 선택
+# --------------------------
+future_year = st.number_input(
+    "예측할 미래 연도",
+    min_value=int(filtered["연도"].max()) + 1,
+    max_value=2100,
+    value=2030
+)
+
+# --------------------------
+# 최고기온 모델
+# --------------------------
+X = filtered[["연도"]]
+
+high_model = LinearRegression()
+high_model.fit(X, filtered["최고기온(℃)"])
+
+pred_high = high_model.predict(
+    np.array([[future_year]])
+)[0]
+
+# --------------------------
+# 최저기온 모델
+# --------------------------
+low_model = LinearRegression()
+low_model.fit(X, filtered["최저기온(℃)"])
+
+pred_low = low_model.predict(
+    np.array([[future_year]])
+)[0]
 
 # --------------------------
 # 그래프
@@ -81,7 +113,7 @@ ax.plot(
     filtered["최고기온(℃)"],
     color="green",
     linewidth=2,
-    label="최고기온"
+    label="실제 최고기온"
 )
 
 ax.plot(
@@ -89,25 +121,60 @@ ax.plot(
     filtered["최저기온(℃)"],
     color="blue",
     linewidth=2,
-    label="최저기온"
+    label="실제 최저기온"
+)
+
+# 예측점 표시
+ax.scatter(
+    future_year,
+    pred_high,
+    s=120,
+    marker="*",
+    label=f"{future_year} 최고기온 예측"
+)
+
+ax.scatter(
+    future_year,
+    pred_low,
+    s=120,
+    marker="*",
+    label=f"{future_year} 최저기온 예측"
 )
 
 ax.set_title(
-    f"{month}월 {day}일의 연도별 최고·최저기온"
+    f"{month}월 {day}일의 연도별 최고·최저기온 및 미래 예측"
 )
 
 ax.set_xlabel("연도")
 ax.set_ylabel("기온(℃)")
-
 ax.grid(True, alpha=0.3)
 ax.legend()
 
 st.pyplot(fig)
 
 # --------------------------
+# 예측 결과
+# --------------------------
+st.subheader(f"🔮 {future_year}년 예측 결과")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.metric(
+        "예상 최고기온",
+        f"{pred_high:.1f}℃"
+    )
+
+with col2:
+    st.metric(
+        "예상 최저기온",
+        f"{pred_low:.1f}℃"
+    )
+
+# --------------------------
 # 데이터 표
 # --------------------------
-st.subheader("데이터")
+st.subheader("과거 관측 데이터")
 
 st.dataframe(
     filtered[
