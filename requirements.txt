@@ -3,6 +3,8 @@ folium
 streamlit-folium
 pandas
 plotly
+matplotlistreamlit
 matplotlib
+scikit-learnb
 numpy
 
