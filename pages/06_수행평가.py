@@ -1,300 +1,264 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from pathlib import Path
 
-# ======================
+# --------------------
 # 페이지 설정
-# ======================
+# --------------------
 
 st.set_page_config(
-    page_title="Spotify Music Analytics",
+    page_title="Spotify Music Trend Analysis",
     page_icon="🎵",
     layout="wide"
 )
 
-# ======================
-# CSS
-# ======================
+# --------------------
+# 스타일
+# --------------------
 
 st.markdown("""
 <style>
 
-.main {
+.stApp {
     background-color: #0E1117;
 }
 
 h1,h2,h3 {
-    color: white;
+    color:white;
 }
 
-.stMetric {
-    background-color: #1DB95420;
-    padding: 10px;
-    border-radius: 10px;
+.metric-box{
+    background:linear-gradient(135deg,#1DB954,#7B2CBF);
+    padding:15px;
+    border-radius:15px;
+    text-align:center;
+    color:white;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ======================
-# 데이터 불러오기
-# ======================
+# --------------------
+# 데이터 로드
+# --------------------
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("songs_normalize.csv")
+
+    possible_paths = [
+        Path("songs_normalize.csv"),
+        Path("data/songs_normalize.csv"),
+        Path(__file__).resolve().parent.parent / "songs_normalize.csv",
+        Path(__file__).resolve().parent.parent / "data" / "songs_normalize.csv",
+    ]
+
+    for path in possible_paths:
+        if path.exists():
+            return pd.read_csv(path)
+
+    st.error("❌ songs_normalize.csv 파일을 찾을 수 없습니다.")
+    st.stop()
 
 df = load_data()
 
-# ======================
-# 사이드바
-# ======================
+# --------------------
+# 제목
+# --------------------
 
-st.sidebar.title("🎵 Spotify Dashboard")
+st.title("🎵 Spotify 음악 트렌드 분석")
+st.caption("2000 ~ 2019 Spotify 인기 음악 데이터 분석")
 
-menu = st.sidebar.radio(
-    "메뉴 선택",
-    [
-        "🏠 홈",
-        "📈 데이터 개요",
-        "🎤 아티스트 분석",
-        "🎼 장르 분석",
-        "🔥 인기곡 분석",
-        "📅 연도별 트렌드",
-        "🎧 오디오 특성",
-        "📊 상관관계 분석",
-        "🌳 트리맵 분석"
-    ]
+# --------------------
+# 연도 선택
+# --------------------
+
+selected_year = st.selectbox(
+    "📅 분석할 연도를 선택하세요",
+    sorted(df["year"].unique())
 )
 
-# ======================
-# 홈
-# ======================
+year_df = df[df["year"] == selected_year]
 
-if menu == "🏠 홈":
+# --------------------
+# KPI
+# --------------------
 
-    st.title("🎵 Spotify Music Analytics Dashboard")
+c1,c2,c3,c4 = st.columns(4)
 
-    st.markdown("""
-    ### 🎧 음악 데이터로 보는 트렌드 분석
+c1.metric(
+    "🎵 총 곡 수",
+    len(year_df)
+)
 
-    Spotify 인기곡 데이터를 활용하여
+c2.metric(
+    "🎤 아티스트 수",
+    year_df["artist"].nunique()
+)
 
-    - 🎤 인기 아티스트
-    - 🎼 장르 분포
-    - 🔥 인기곡 TOP 25
-    - 📅 연도별 트렌드
-    - 🎧 오디오 특성
-    - 📊 상관관계 분석
+c3.metric(
+    "🎼 장르 수",
+    year_df["genre"].nunique()
+)
 
-    을 시각화한 프로젝트입니다.
-    """)
+c4.metric(
+    "🔥 평균 인기",
+    round(year_df["popularity"].mean(),1)
+)
 
-    c1, c2, c3, c4 = st.columns(4)
+st.divider()
 
-    c1.metric("🎵 총 곡 수", f"{len(df):,}")
-    c2.metric("🎤 아티스트 수", f"{df['artist'].nunique():,}")
-    c3.metric("🎼 장르 수", f"{df['genre'].nunique():,}")
-    c4.metric("📅 기간", f"{df['year'].min()}~{df['year'].max()}")
+# --------------------
+# 인기 장르
+# --------------------
 
-# ======================
-# 데이터 개요
-# ======================
+st.subheader(f"🎼 {selected_year} 인기 장르 TOP 10")
 
-elif menu == "📈 데이터 개요":
+genre_top = (
+    year_df.groupby("genre")
+    .size()
+    .reset_index(name="곡 수")
+    .sort_values("곡 수", ascending=False)
+    .head(10)
+)
 
-    st.title("📈 데이터 개요")
+fig = px.bar(
+    genre_top,
+    x="genre",
+    y="곡 수",
+    color="곡 수",
+    color_continuous_scale=["#7B2CBF","#1DB954"]
+)
 
-    st.dataframe(df.head(20), use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("결측치 확인")
+# --------------------
+# 인기 아티스트
+# --------------------
 
-    missing = pd.DataFrame(
-        df.isnull().sum(),
-        columns=["결측치"]
-    )
+st.subheader(f"🎤 {selected_year} 인기 아티스트 TOP 10")
 
-    st.dataframe(missing)
+artist_top = (
+    year_df.groupby("artist")
+    .size()
+    .reset_index(name="곡 수")
+    .sort_values("곡 수", ascending=False)
+    .head(10)
+)
 
-# ======================
-# 아티스트 분석
-# ======================
+fig = px.bar(
+    artist_top,
+    y="artist",
+    x="곡 수",
+    orientation="h",
+    color="곡 수",
+    color_continuous_scale=["#7B2CBF","#1DB954"]
+)
 
-elif menu == "🎤 아티스트 분석":
+st.plotly_chart(fig, use_container_width=True)
 
-    st.title("🎤 TOP 20 아티스트")
+# --------------------
+# 인기곡
+# --------------------
 
-    artist_df = (
-        df.groupby("artist")
-        .size()
-        .reset_index(name="곡 수")
-        .sort_values("곡 수", ascending=False)
-        .head(20)
-    )
+st.subheader(f"🔥 {selected_year} 인기곡 TOP 10")
 
-    fig = px.bar(
-        artist_df,
-        x="곡 수",
-        y="artist",
-        orientation="h",
-        color="곡 수"
-    )
+top_song = (
+    year_df
+    .sort_values("popularity", ascending=False)
+    .head(10)
+)
 
-    fig.update_layout(height=700)
+st.dataframe(
+    top_song[
+        ["song","artist","genre","popularity"]
+    ],
+    use_container_width=True
+)
 
-    st.plotly_chart(fig, use_container_width=True)
+# --------------------
+# 음악 특징
+# --------------------
 
-# ======================
-# 장르 분석
-# ======================
+st.subheader("🎧 음악 특징 분석")
 
-elif menu == "🎼 장르 분석":
+feature_df = pd.DataFrame({
+    "특성":[
+        "danceability",
+        "energy",
+        "acousticness",
+        "valence"
+    ],
+    "값":[
+        year_df["danceability"].mean(),
+        year_df["energy"].mean(),
+        year_df["acousticness"].mean(),
+        year_df["valence"].mean()
+    ]
+})
 
-    st.title("🎼 TOP 15 장르")
+fig = px.bar(
+    feature_df,
+    x="특성",
+    y="값",
+    color="값",
+    color_continuous_scale=["#7B2CBF","#1DB954"]
+)
 
-    genre_df = (
-        df.groupby("genre")
-        .size()
-        .reset_index(name="곡 수")
-        .sort_values("곡 수", ascending=False)
-        .head(15)
-    )
+st.plotly_chart(fig, use_container_width=True)
 
-    fig = px.bar(
-        genre_df,
-        x="genre",
-        y="곡 수",
-        color="곡 수"
-    )
+# --------------------
+# 장르 변화
+# --------------------
 
-    st.plotly_chart(fig, use_container_width=True)
+st.subheader("📈 2000~2019 인기 장르 변화")
 
-# ======================
-# 인기곡 분석
-# ======================
+genre_year = (
+    df.groupby(["year","genre"])
+    .size()
+    .reset_index(name="count")
+)
 
-elif menu == "🔥 인기곡 분석":
+top_genres = (
+    df["genre"]
+    .value_counts()
+    .head(5)
+    .index
+)
 
-    st.title("🔥 인기곡 TOP 25")
+genre_year = genre_year[
+    genre_year["genre"].isin(top_genres)
+]
 
-    top_song = (
-        df.sort_values("popularity", ascending=False)
-        .head(25)
-    )
+fig = px.line(
+    genre_year,
+    x="year",
+    y="count",
+    color="genre",
+    markers=True
+)
 
-    fig = px.bar(
-        top_song,
-        x="popularity",
-        y="song",
-        color="popularity",
-        hover_data=["artist"]
-    )
+st.plotly_chart(fig, use_container_width=True)
 
-    fig.update_layout(height=800)
+# --------------------
+# 자동 트렌드 해설
+# --------------------
 
-    st.plotly_chart(fig, use_container_width=True)
+top_genre = genre_top.iloc[0]["genre"]
 
-    st.dataframe(
-        top_song[
-            ["song", "artist", "popularity", "year"]
-        ],
-        use_container_width=True
-    )
+top_artist = artist_top.iloc[0]["artist"]
 
-# ======================
-# 연도별 트렌드
-# ======================
+st.success(
+f"""
+🎵 {selected_year}년 음악 트렌드 분석
 
-elif menu == "📅 연도별 트렌드":
+🎼 가장 인기 있었던 장르 : {top_genre}
 
-    st.title("📅 연도별 음악 수")
+🎤 가장 활발했던 아티스트 : {top_artist}
 
-    year_df = (
-        df.groupby("year")
-        .size()
-        .reset_index(name="곡 수")
-    )
+📊 총 {len(year_df)}곡이 데이터에 포함되어 있습니다.
 
-    fig = px.area(
-        year_df,
-        x="year",
-        y="곡 수",
-        markers=True
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-# ======================
-# 오디오 특성
-# ======================
-
-elif menu == "🎧 오디오 특성":
-
-    st.title("🎧 오디오 특성 분석")
-
-    feature = st.selectbox(
-        "특성 선택",
-        [
-            "danceability",
-            "energy",
-            "speechiness",
-            "acousticness",
-            "instrumentalness",
-            "liveness",
-            "valence",
-            "tempo"
-        ]
-    )
-
-    fig = px.histogram(
-        df,
-        x=feature,
-        nbins=30
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-# ======================
-# 상관관계
-# ======================
-
-elif menu == "📊 상관관계 분석":
-
-    st.title("📊 상관관계 분석")
-
-    numeric_df = df.select_dtypes(include="number")
-
-    corr = numeric_df.corr()
-
-    fig = px.imshow(
-        corr,
-        text_auto=".2f",
-        aspect="auto"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-# ======================
-# 트리맵
-# ======================
-
-elif menu == "🌳 트리맵 분석":
-
-    st.title("🌳 장르별 인기 트리맵")
-
-    tree_df = (
-        df.groupby("genre")["popularity"]
-        .mean()
-        .reset_index()
-        .sort_values("popularity", ascending=False)
-        .head(25)
-    )
-
-    fig = px.treemap(
-        tree_df,
-        path=["genre"],
-        values="popularity",
-        color="popularity"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+이 시기 음악의 특징은 Danceability와 Energy를 기반으로
+분석할 수 있으며 당시의 음악 시장 흐름을 확인할 수 있습니다.
+"""
+)
